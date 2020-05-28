@@ -82,6 +82,7 @@ var fsOptions = []fs.Option{
 			encoder.EncodeLeftSpace | encoder.EncodeLeftPeriod | encoder.EncodeLeftTilde |
 			encoder.EncodeLeftCrLfHtVt | encoder.EncodeRightSpace | encoder.EncodeRightPeriod |
 			encoder.EncodeRightCrLfHtVt | encoder.EncodeInvalidUtf8 | encoder.EncodeDot,
+		// OK: EncodeSingleQuote EncodeBackQuote EncodeDollar EncodeHash EncodePercent
 	},
 }
 
