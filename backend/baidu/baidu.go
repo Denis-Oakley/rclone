@@ -76,10 +76,12 @@ var fsOptions = []fs.Option{
 		Name:     config.ConfigEncoding,
 		Help:     config.ConfigEncodingHelp,
 		Advanced: true,
-		Default: encoder.Display |
-			encoder.EncodeBackSlash |
-			encoder.EncodeRightSpace |
-			encoder.EncodeInvalidUtf8,
+		Default: encoder.EncodeZero | encoder.EncodeSlash | encoder.EncodeLtGt | encoder.EncodeDoubleQuote |
+			encoder.EncodeColon | encoder.EncodeQuestion | encoder.EncodeAsterisk | encoder.EncodePipe |
+			encoder.EncodeBackSlash | encoder.EncodeCrLf | encoder.EncodeDel | encoder.EncodeCtl |
+			encoder.EncodeLeftSpace | encoder.EncodeLeftPeriod | encoder.EncodeLeftTilde |
+			encoder.EncodeLeftCrLfHtVt | encoder.EncodeRightSpace | encoder.EncodeRightPeriod |
+			encoder.EncodeRightCrLfHtVt | encoder.EncodeInvalidUtf8 | encoder.EncodeDot,
 	},
 }
 
