@@ -97,12 +97,8 @@ func (f *Fs) Precision() time.Duration {
 // NewObject finds the Object at remote.  If it can't be found
 // it returns the error fs.ErrorObjectNotFound.
 func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
-	return f.newObject(remote)
-}
-
-func (f *Fs) newObject(relativePath string) (fs.Object, error) {
-	absolutePath := filepath.Join(f.rootWithSlash, relativePath)
-	fs.Debugf(f, "newObject: %s", absolutePath)
+	absolutePath := filepath.Join(f.rootWithSlash, remote)
+	fs.Debugf(f, "newObjectWithInfo: %s", absolutePath)
 	fullPathEncoded := f.opt.Enc.FromStandardPath(absolutePath)
 	meta, err := f.baiduPcs.FilesDirectoriesMeta(fullPathEncoded)
 	if err != nil {
@@ -117,7 +113,7 @@ func (f *Fs) newObject(relativePath string) (fs.Object, error) {
 	}
 	return &Object{
 		fs:           f,
-		relativePath: relativePath,
+		relativePath: remote,
 		absolutePath: absolutePath,
 		size:         meta.Size,
 		modTime:      time.Unix(meta.Mtime, 0),
@@ -135,7 +131,7 @@ func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err e
 	absolutePath := filepath.Join(f.rootWithSlash, dir)
 	fs.Debugf(f, "List: %s", absolutePath)
 	dirEncoded := f.opt.Enc.FromStandardPath(absolutePath)
-	list, err := f.baiduPcs.FilesDirectoriesList(dirEncoded, nil) // TODO
+	list, err := f.baiduPcs.FilesDirectoriesList(dirEncoded, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -147,11 +143,13 @@ func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err e
 			newDir := fs.NewDir(relativePath, time.Unix(entry.Mtime, 0))
 			dirEntries = append(dirEntries, newDir)
 		} else {
-			newObject, err := f.newObject(relativePath)
-			if err != nil {
-				return nil, err
-			}
-			dirEntries = append(dirEntries, newObject)
+			dirEntries = append(dirEntries, &Object{
+				fs:           f,
+				relativePath: relativePath,
+				absolutePath: entry.Path,
+				size:         entry.Size,
+				modTime:      time.Unix(entry.Mtime, 0),
+			})
 		}
 	}
 	return dirEntries, nil
