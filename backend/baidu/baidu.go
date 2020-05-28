@@ -59,7 +59,7 @@ var fsOptions = []fs.Option{
 		Required: true,
 	}, {
 		Name:     "max_upload_thread_count",
-		Help:     "Maximum upload thread limit.",
+		Help:     "Maximum upload thread limit. The bigger the more likely to cause network congestion.",
 		Default:  3,
 		Advanced: true,
 	}, {

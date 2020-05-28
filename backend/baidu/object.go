@@ -71,7 +71,7 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (in io.Read
 	fs.Debugf(o, "Open")
 	fs.Errorf(o, "Download Not Supported. There are some reasons.\n"+
 		"I am currently too lazy to implement this function, you are welcome to contribute."+
-		"And I am worried that supporting download will increase the possibility of Baidu blocking this interface.\n")
+		"And I am worried that supporting download will increase the possibility of Baidu blocking this API.\n")
 	return nil, errors.New("download not supported")
 }
 
