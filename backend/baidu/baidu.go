@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sync"
 
 	"github.com/iikira/BaiduPCS-Go/baidupcs/pcserror"
 	"github.com/iikira/baidu-tools/tieba"
@@ -16,10 +17,13 @@ import (
 )
 
 const (
-	fieldBduss       = "bduss"
-	fieldStoken      = "stoken"
-	fieldChunkSize   = "chunk_size"
-	fieldBufMemLimit = "buffer_memory_limit"
+	fieldBduss  = "bduss"
+	fieldStoken = "stoken"
+)
+
+var (
+	uploadBufBytesSlice []*BufBytes
+	uploadBufLock       sync.Mutex
 )
 
 func init() {
@@ -54,19 +58,19 @@ var fsOptions = []fs.Option{
 		Help:     "Baidu STOKEN. Fill to login. Also in cookies.",
 		Required: true,
 	}, {
+		Name:     "max_upload_thread_count",
+		Help:     "Maximum upload thread limit.",
+		Default:  3,
+		Advanced: true,
+	}, {
+		Name:     "upload_chunk_size",
+		Help:     "Upload chunk size.",
+		Default:  int64(5 * 2e6),
+		Advanced: true,
+	}, {
 		Name:     config.ConfigClientID,
 		Help:     "Baidu App Id.",
 		Default:  266719,
-		Advanced: true,
-	}, {
-		Name:     fieldBufMemLimit,
-		Help:     "Download and upload buffer memory limit.",
-		Default:  int64(10 * 2e6),
-		Advanced: true,
-	}, {
-		Name:     fieldChunkSize,
-		Help:     "Download and upload chunk size.",
-		Default:  int64(1 * 2e6),
 		Advanced: true,
 	}, {
 		Name:     config.ConfigEncoding,
@@ -81,16 +85,15 @@ var fsOptions = []fs.Option{
 
 // Options defines the configuration for this backend
 type Options struct {
-	ClientId         string `config:"client_id"`
-	Bduss            string `config:"bduss"`
-	Stoken           string `config:"stoken"`
-	BufMemLimit      int64  `config:"buffer_memory_limit"`
-	ChunkSize        int64  `config:"chunk_size"`
-	BufferCountLimit int
-	Enc              encoder.MultiEncoder `config:"encoding"`
+	Bduss                string               `config:"bduss"`
+	Stoken               string               `config:"stoken"`
+	MaxUploadThreadCount int                  `config:"max_upload_thread_count"`
+	UploadChunkSize      int64                `config:"upload_chunk_size"`
+	ClientId             string               `config:"client_id"`
+	Enc                  encoder.MultiEncoder `config:"encoding"`
 }
 
-type BytesReader struct {
+type BufBytes struct {
 	b    []byte
 	len  int64
 	i    int64 // current read index
@@ -113,10 +116,10 @@ func printPcsError(pcsError pcserror.Error) {
 
 // -----------------------------------------------
 
-func (r *BytesReader) Read(p []byte) (int, error) {
+func (r *BufBytes) Read(p []byte) (int, error) {
 	n := copy(p, r.b[r.i:r.Len()])
-	r.i += int64(n)
 	// fs.Debugf(nil, "read: %d", n)
+	r.i += int64(n)
 	if r.i == r.len {
 		r.i = 0 // prepare for next reading
 		return n, io.EOF
@@ -124,17 +127,18 @@ func (r *BytesReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (r *BytesReader) Len() int64 {
+func (r *BufBytes) Len() int64 {
 	return r.len
 }
 
-func (r *BytesReader) write(in io.Reader) error {
+func (r *BufBytes) write(in io.Reader) error {
 	n, err := io.ReadFull(in, r.b)
 	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return err
 	}
+	// fs.Debugf(nil, "written: %d", n)
 	r.len = int64(n)
-	// fs.Debugf(nil, "wrote: %d", n)
+	r.i = 0
 	return nil
 }
 

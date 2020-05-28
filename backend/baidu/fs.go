@@ -17,11 +17,12 @@ import (
 
 // Fs represents a remote baidu
 type Fs struct {
-	name     string       // name of this remote
-	root     string       // the path we are working on
-	opt      Options      // parsed options
-	features *fs.Features // optional features
-	baiduPcs *baidupcs.BaiduPCS
+	name          string // name of this remote
+	root          string // the path we are working on
+	rootWithSlash string
+	opt           Options      // parsed options
+	features      *fs.Features // optional features
+	baiduPcs      *baidupcs.BaiduPCS
 	// dirCache     *dircache.DirCache // Map of directory path to directory id
 }
 
@@ -35,8 +36,6 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 		return nil, err
 	}
 
-	fs.Debugf(nil, "ChunkSize: %d", opt.ChunkSize)
-	opt.BufferCountLimit = int(opt.BufMemLimit / opt.ChunkSize)
 	appId, err := strconv.Atoi(opt.ClientId)
 	if err != nil {
 		return nil, err
@@ -48,15 +47,23 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 	baiduPcs.SetHTTPS(true)
 
 	f := &Fs{
-		name:     name,
-		root:     root,
-		opt:      *opt,
-		baiduPcs: baiduPcs,
+		name:          name,
+		root:          root,
+		rootWithSlash: addSlash(root),
+		opt:           *opt,
+		baiduPcs:      baiduPcs,
 	}
+
+	uploadBufLock.Lock()
+	if len(uploadBufBytesSlice) == 0 {
+		uploadBufBytesSlice = f.newBufBytesSlice(opt.MaxUploadThreadCount)
+	}
+	uploadBufLock.Unlock()
+
 	f.features = (&fs.Features{
 		CaseInsensitive:         true,
 		CanHaveEmptyDirectories: true,
-		Move:                    f.Move,
+		Purge:                   f.Purge,
 	}).Fill(f)
 
 	return f, nil
@@ -74,12 +81,11 @@ func (f *Fs) Root() string {
 
 // String converts this Fs to a string
 func (f *Fs) String() string {
-	return fmt.Sprintf("Backend for Baidu Net Disk, root: %s", f.root)
+	return fmt.Sprintf("Backend for Baidu Net Disk, root: %s", f.rootWithSlash)
 }
 
 // Features returns the optional features of this Fs
 func (f *Fs) Features() *fs.Features {
-	fs.Debugf(f, "Features")
 	return f.features
 }
 
@@ -91,15 +97,14 @@ func (f *Fs) Precision() time.Duration {
 // NewObject finds the Object at remote.  If it can't be found
 // it returns the error fs.ErrorObjectNotFound.
 func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
-	fs.Debugf(f, "NewObject: %s", remote)
-	fullPath := filepath.Join(f.Root(), remote)
-	return f.newObjectWithFullPath(fullPath)
+	return f.newObject(remote)
 }
 
-func (f *Fs) newObjectWithFullPath(fullPath string) (fs.Object, error) {
-	fs.Debugf(f, "newObjectWithFullPath: %s", fullPath)
-	fullPath = f.opt.Enc.FromStandardPath(fullPath)
-	meta, err := f.baiduPcs.FilesDirectoriesMeta(fullPath)
+func (f *Fs) newObject(relativePath string) (fs.Object, error) {
+	absolutePath := filepath.Join(f.rootWithSlash, relativePath)
+	fs.Debugf(f, "newObject: %s", absolutePath)
+	fullPathEncoded := f.opt.Enc.FromStandardPath(absolutePath)
+	meta, err := f.baiduPcs.FilesDirectoriesMeta(fullPathEncoded)
 	if err != nil {
 		if err.GetRemoteErrCode() == 31066 {
 			// File not found
@@ -111,10 +116,11 @@ func (f *Fs) newObjectWithFullPath(fullPath string) (fs.Object, error) {
 		return nil, fs.ErrorNotAFile
 	}
 	return &Object{
-		fs:      f,
-		remote:  removeSlash(fullPath),
-		size:    meta.Size,
-		modTime: time.Unix(meta.Mtime, 0),
+		fs:           f,
+		relativePath: relativePath,
+		absolutePath: absolutePath,
+		size:         meta.Size,
+		modTime:      time.Unix(meta.Mtime, 0),
 	}, nil
 }
 
@@ -126,22 +132,22 @@ func (f *Fs) newObjectWithFullPath(fullPath string) (fs.Object, error) {
 // This should return ErrDirNotFound if the directory isn't
 // found.
 func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err error) {
-	fs.Debugf(f, "List: %s", dir)
-	dir = f.opt.Enc.FromStandardPath(dir)
-	list, err := f.baiduPcs.FilesDirectoriesList(addSlash(dir), nil)
+	absolutePath := filepath.Join(f.rootWithSlash, dir)
+	fs.Debugf(f, "List: %s", absolutePath)
+	dirEncoded := f.opt.Enc.FromStandardPath(absolutePath)
+	list, err := f.baiduPcs.FilesDirectoriesList(dirEncoded, nil) // TODO
 	if err != nil {
 		return nil, err
 	}
 
-	var dirEntries []fs.DirEntry
+	dirEntries := make([]fs.DirEntry, 0, len(list))
 	for _, entry := range list {
-		fullPath := filepath.Join(dir, entry.Filename)
-		fullPath = f.opt.Enc.ToStandardPath(fullPath)
+		relativePath := filepath.Join(dir, f.opt.Enc.ToStandardName(entry.Filename))
 		if entry.Isdir {
-			newDir := fs.NewDir(fullPath, time.Unix(entry.Mtime, 0))
+			newDir := fs.NewDir(relativePath, time.Unix(entry.Mtime, 0))
 			dirEntries = append(dirEntries, newDir)
 		} else {
-			newObject, err := f.newObjectWithFullPath(addSlash(fullPath))
+			newObject, err := f.newObject(relativePath)
 			if err != nil {
 				return nil, err
 			}
@@ -155,11 +161,12 @@ func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err e
 // Copy the reader in to the new object which is returned
 // The new object may have been created if an error is returned
 func (f *Fs) Put(ctx context.Context, in io.Reader, src fs.ObjectInfo, options ...fs.OpenOption) (fs.Object, error) {
-	fs.Debugf(f, "Put: %s", src.Remote())
 	o := &Object{
-		fs:     f,
-		remote: src.Remote(),
+		fs:           f,
+		relativePath: src.Remote(),
+		absolutePath: filepath.Join(f.rootWithSlash, src.Remote()),
 	}
+	fs.Debugf(f, "Put: %s", o.absolutePath)
 	err := o.Update(ctx, in, src, options...)
 	return o, err
 }
@@ -172,18 +179,20 @@ func (f *Fs) Put(ctx context.Context, in io.Reader, src fs.ObjectInfo, options .
 
 // Mkdir creates the container if it doesn't exist
 func (f *Fs) Mkdir(ctx context.Context, dir string) error {
+	dir = filepath.Join(f.rootWithSlash, dir)
 	fs.Debugf(f, "Mkdir: %s", dir)
-	dir = f.opt.Enc.FromStandardPath(dir)
-	pcsError := f.baiduPcs.Mkdir(addSlash(dir))
+	path := f.opt.Enc.FromStandardPath(dir)
+	pcsError := f.baiduPcs.Mkdir(path)
 	return pcsError
 }
 
 // Rmdir deletes the root folder
 // Returns an error if it isn't empty
 func (f *Fs) Rmdir(ctx context.Context, dir string) error {
+	dir = filepath.Join(f.rootWithSlash, dir)
 	fs.Debugf(f, "Rmdir: %s", dir)
-	dir = f.opt.Enc.FromStandardPath(dir)
-	pcsError := f.baiduPcs.Remove(addSlash(dir))
+	path := f.opt.Enc.FromStandardPath(dir)
+	pcsError := f.baiduPcs.Remove(path)
 	return pcsError
 }
 
@@ -217,12 +226,18 @@ func (f *Fs) Hashes() hash.Set {
 	return hash.Set(hash.MD5)
 }
 
-func (f *Fs) NewBytesReaders(count int) []*BytesReader {
-	bytesReaders := make([]*BytesReader, count)
+func (f *Fs) newBufBytesSlice(count int) []*BufBytes {
+	bufBytesSlice := make([]*BufBytes, count)
 	for i := 0; i < count; i++ {
-		bytesReaders[i] = new(BytesReader)
-		bytesReaders[i].b = make([]byte, f.opt.ChunkSize)
-		bytesReaders[i].done = make(chan int, 1)
+		bufBytesSlice[i] = f.newBufBytes()
 	}
-	return bytesReaders
+	return bufBytesSlice
+}
+
+func (f *Fs) newBufBytes() *BufBytes {
+	bufBytes := new(BufBytes)
+	bufBytes.b = make([]byte, f.opt.UploadChunkSize)
+	bufBytes.done = make(chan int, 1)
+	bufBytes.done <- 0
+	return bufBytes
 }

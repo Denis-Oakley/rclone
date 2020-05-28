@@ -12,10 +12,11 @@ import (
 
 // Object describes a baidu object
 type Object struct {
-	fs      *Fs       // what this object is part of
-	remote  string    // The remote path
-	size    int64     // size of the object
-	modTime time.Time // modification time of the object
+	fs           *Fs    // what this object is part of
+	relativePath string // The remote path
+	absolutePath string
+	size         int64     // size of the object
+	modTime      time.Time // modification time of the object
 }
 
 // Fs returns the parent Fs
@@ -28,12 +29,12 @@ func (o *Object) String() string {
 	if o == nil {
 		return "<nil>"
 	}
-	return o.remote
+	return o.absolutePath
 }
 
 // Remote returns the remote path
 func (o *Object) Remote() string {
-	return o.remote
+	return o.relativePath
 }
 
 // Hash returns the SHA-1 of an object returning a lowercase hex string
@@ -56,7 +57,7 @@ func (o *Object) ModTime(ctx context.Context) time.Time {
 
 // SetModTime sets the modification time of the local fs object
 func (o *Object) SetModTime(ctx context.Context, modTime time.Time) error {
-	fs.Debugf(o, "SetModTime: %s, %s", o.Remote(), modTime)
+	fs.Debugf(o, "SetModTime: %s", modTime)
 	return errors.New("setModTime not supported")
 }
 
@@ -77,7 +78,7 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (in io.Read
 // Remove an object
 func (o *Object) Remove(ctx context.Context) error {
 	fs.Debugf(o, "Remove")
-	path := o.fs.opt.Enc.FromStandardPath(o.Remote())
-	pcsError := o.fs.baiduPcs.Remove(addSlash(path))
+	path := o.fs.opt.Enc.FromStandardPath(o.absolutePath)
+	pcsError := o.fs.baiduPcs.Remove(path)
 	return pcsError
 }
