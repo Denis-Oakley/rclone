@@ -103,7 +103,7 @@ func init() {
 			},
 			{
 				Name:     "satellite_address",
-				Help:     "Satellite Address. Custom satellite address should match the format: <nodeid>@<address>:<port>.",
+				Help:     "Satellite Address. Custom satellite address should match the format: `<nodeid>@<address>:<port>`.",
 				Required: false,
 				Provider: newProvider,
 				Default:  "us-central-1.tardigrade.io",
@@ -518,7 +518,7 @@ func (f *Fs) NewObject(ctx context.Context, relative string) (_ fs.Object, err e
 
 // Put in to the remote path with the modTime given of the given size
 //
-// When called from outside a Fs by rclone, src.Size() will always be >= 0.
+// When called from outside an Fs by rclone, src.Size() will always be >= 0.
 // But for unknown-sized objects (indicated by src.Size() == -1), Put should
 // either return an error or upload it properly (rather than e.g. calling
 // panic).
