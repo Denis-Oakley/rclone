@@ -200,7 +200,8 @@ func (f *Fs) Rmdir(ctx context.Context, dir string) error {
 // result of List()
 func (f *Fs) Purge(ctx context.Context) error {
 	fs.Debugf(f, "Purge")
-	pcsError := f.baiduPcs.Remove("/")
+	path := f.opt.Enc.FromStandardPath(f.rootWithSlash)
+	pcsError := f.baiduPcs.Remove(path)
 	return pcsError
 }
 
