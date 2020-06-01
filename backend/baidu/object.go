@@ -78,6 +78,7 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (in io.Read
 // Remove an object
 func (o *Object) Remove(ctx context.Context) error {
 	fs.Debugf(o, "Remove")
+	<-deletingTicker
 	path := o.fs.opt.Enc.FromStandardPath(o.absolutePath)
 	pcsError := o.fs.baiduPcs.Remove(path)
 	return pcsError

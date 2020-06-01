@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/iikira/BaiduPCS-Go/baidupcs/pcserror"
 	"github.com/iikira/baidu-tools/tieba"
@@ -23,7 +24,8 @@ const (
 
 var (
 	uploadBufBytesSlice []*BufBytes
-	uploadBufLock       sync.Mutex
+	fsLock              sync.Mutex
+	deletingTicker      <-chan time.Time
 )
 
 func init() {

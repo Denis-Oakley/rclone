@@ -54,11 +54,14 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 		baiduPcs:      baiduPcs,
 	}
 
-	uploadBufLock.Lock()
+	fsLock.Lock()
 	if len(uploadBufBytesSlice) == 0 {
 		uploadBufBytesSlice = f.newBufBytesSlice(opt.MaxUploadThreadCount)
 	}
-	uploadBufLock.Unlock()
+	if deletingTicker == nil {
+		deletingTicker = time.Tick(time.Second)
+	}
+	fsLock.Unlock()
 
 	f.features = (&fs.Features{
 		CaseInsensitive:         true,
@@ -189,6 +192,7 @@ func (f *Fs) Mkdir(ctx context.Context, dir string) error {
 func (f *Fs) Rmdir(ctx context.Context, dir string) error {
 	dir = filepath.Join(f.rootWithSlash, dir)
 	fs.Debugf(f, "Rmdir: %s", dir)
+	<-deletingTicker
 	path := f.opt.Enc.FromStandardPath(dir)
 	pcsError := f.baiduPcs.Remove(path)
 	return pcsError
