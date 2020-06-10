@@ -1,7 +1,6 @@
 ---
 title: "Seafile"
 description: "Seafile"
-date: "2020-05-19"
 ---
 
 {{< icon "fa fa-server" >}}Seafile
@@ -113,7 +112,7 @@ List the contents of a library
 Sync `/home/local/directory` to the remote library, deleting any
 excess files in the library.
 
-    rclone sync /home/local/directory seafile:library
+    rclone sync -i /home/local/directory seafile:library
 
 ### Configuration in library mode ###
 
@@ -209,7 +208,7 @@ List the contents of a directory
 Sync `/home/local/directory` to the remote library, deleting any
 excess files in the library.
 
-    rclone sync /home/local/directory seafile:
+    rclone sync -i /home/local/directory seafile:
 
 
 ### --fast-list ###
