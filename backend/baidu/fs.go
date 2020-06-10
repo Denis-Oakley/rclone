@@ -61,6 +61,9 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 	if deletingTicker == nil {
 		deletingTicker = time.Tick(time.Second)
 	}
+	if creatingFileTicker == nil {
+		creatingFileTicker = time.Tick(time.Second)
+	}
 	fsLock.Unlock()
 
 	f.features = (&fs.Features{

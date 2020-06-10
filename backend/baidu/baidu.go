@@ -26,6 +26,7 @@ var (
 	uploadBufBytesSlice []*BufBytes
 	fsLock              sync.Mutex
 	deletingTicker      <-chan time.Time
+	creatingFileTicker  <-chan time.Time
 )
 
 func init() {
