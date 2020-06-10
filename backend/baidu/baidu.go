@@ -123,11 +123,10 @@ func printPcsError(pcsError pcserror.Error) {
 // -----------------------------------------------
 
 func (r *BufBytes) Read(p []byte) (int, error) {
-	n := copy(p, r.b[r.i:r.Len()])
+	n := copy(p, r.b[r.i:r.len])
 	// fs.Debugf(nil, "read: %d", n)
 	r.i += int64(n)
 	if r.i == r.len {
-		r.i = 0 // prepare for next reading
 		return n, io.EOF
 	}
 	return n, nil
