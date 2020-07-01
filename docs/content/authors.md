@@ -382,3 +382,10 @@ put them back in again.` >}}
   * edwardxml <56691903+edwardxml@users.noreply.github.com>
   * Roman Kredentser <shareed2k@gmail.com>
   * Kamil Trzciński <ayufan@ayufan.eu>
+  * Zac Rubin <z-0@users.noreply.github.com>
+  * Vincent Feltz <psycho@feltzv.fr>
+  * Heiko Bornholdt <bornholdt@informatik.uni-hamburg.de>
+  * Matteo Pietro Dazzi <matteopietro.dazzi@gmail.com>
+  * jtagcat <gitlab@c7.ee>
+  * Petri Salminen <petri@salminen.dev>
+  * Tim Burke <tim.burke@gmail.com>

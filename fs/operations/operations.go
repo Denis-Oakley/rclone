@@ -207,7 +207,7 @@ func equal(ctx context.Context, src fs.ObjectInfo, dst fs.Object, opt equalOpt) 
 		fs.Debugf(src, "%v differ", ht)
 		return false
 	}
-	if ht == hash.None {
+	if ht == hash.None && !fs.Config.RefreshTimes {
 		// if couldn't check hash, return that they differ
 		return false
 	}
@@ -756,6 +756,8 @@ type checkFn func(ctx context.Context, a, b fs.Object) (differ bool, noHash bool
 type checkMarch struct {
 	fdst, fsrc      fs.Fs
 	check           checkFn
+	wg              sync.WaitGroup
+	tokens          chan struct{}
 	oneway          bool
 	differences     int32
 	noHashes        int32
@@ -830,18 +832,29 @@ func (c *checkMarch) Match(ctx context.Context, dst, src fs.DirEntry) (recurse b
 	case fs.Object:
 		dstX, ok := dst.(fs.Object)
 		if ok {
-			differ, noHash := c.checkIdentical(ctx, dstX, srcX)
-			if differ {
-				atomic.AddInt32(&c.differences, 1)
-			} else {
-				atomic.AddInt32(&c.matches, 1)
-				if noHash {
-					atomic.AddInt32(&c.noHashes, 1)
-					fs.Debugf(dstX, "OK - could not check hash")
-				} else {
-					fs.Debugf(dstX, "OK")
-				}
+			if SkipDestructive(ctx, src, "check") {
+				return false
 			}
+			c.wg.Add(1)
+			c.tokens <- struct{}{} // put a token to limit concurrency
+			go func() {
+				defer func() {
+					<-c.tokens // get the token back to free up a slot
+					c.wg.Done()
+				}()
+				differ, noHash := c.checkIdentical(ctx, dstX, srcX)
+				if differ {
+					atomic.AddInt32(&c.differences, 1)
+				} else {
+					atomic.AddInt32(&c.matches, 1)
+					if noHash {
+						atomic.AddInt32(&c.noHashes, 1)
+						fs.Debugf(dstX, "OK - could not check hash")
+					} else {
+						fs.Debugf(dstX, "OK")
+					}
+				}
+			}()
 		} else {
 			err := errors.Errorf("is file on %v but directory on %v", c.fsrc, c.fdst)
 			fs.Errorf(src, "%v", err)
@@ -880,6 +893,7 @@ func CheckFn(ctx context.Context, fdst, fsrc fs.Fs, check checkFn, oneway bool) 
 		fsrc:   fsrc,
 		check:  check,
 		oneway: oneway,
+		tokens: make(chan struct{}, fs.Config.Checkers),
 	}
 
 	// set up a march over fdst and fsrc
@@ -892,6 +906,7 @@ func CheckFn(ctx context.Context, fdst, fsrc fs.Fs, check checkFn, oneway bool) 
 	}
 	fs.Debugf(fdst, "Waiting for checks to finish")
 	err := m.Run()
+	c.wg.Wait() // wait for background go-routines
 
 	if c.dstFilesMissing > 0 {
 		fs.Logf(fdst, "%d files missing", c.dstFilesMissing)
@@ -900,7 +915,10 @@ func CheckFn(ctx context.Context, fdst, fsrc fs.Fs, check checkFn, oneway bool) 
 		fs.Logf(fsrc, "%d files missing", c.srcFilesMissing)
 	}
 
-	fs.Logf(fdst, "%d differences found", accounting.Stats(ctx).GetErrors())
+	fs.Logf(fdst, "%d differences found", c.differences)
+	if errs := accounting.Stats(ctx).GetErrors(); errs > 0 {
+		fs.Logf(fdst, "%d errors while checking", errs)
+	}
 	if c.noHashes > 0 {
 		fs.Logf(fdst, "%d hashes could not be checked", c.noHashes)
 	}
@@ -948,18 +966,45 @@ func CheckEqualReaders(in1, in2 io.Reader) (differ bool, err error) {
 	return false, nil
 }
 
-// CheckIdentical checks to see if dst and src are identical by
-// reading all their bytes if necessary.
+// Retry runs fn up to maxTries times if it returns a retriable error
+func Retry(o interface{}, maxTries int, fn func() error) (err error) {
+	for tries := 1; tries <= maxTries; tries++ {
+		// Call the function which might error
+		err = fn()
+		if err == nil {
+			break
+		}
+		// Retry if err returned a retry error
+		if fserrors.IsRetryError(err) || fserrors.ShouldRetry(err) {
+			fs.Debugf(o, "Received error: %v - low level retry %d/%d", err, tries, maxTries)
+			continue
+		}
+		break
+	}
+	return err
+}
+
+// CheckIdenticalDownload checks to see if dst and src are identical
+// by reading all their bytes if necessary.
 //
 // it returns true if differences were found
-func CheckIdentical(ctx context.Context, dst, src fs.Object) (differ bool, err error) {
+func CheckIdenticalDownload(ctx context.Context, dst, src fs.Object) (differ bool, err error) {
+	err = Retry(src, fs.Config.LowLevelRetries, func() error {
+		differ, err = checkIdenticalDownload(ctx, dst, src)
+		return err
+	})
+	return differ, err
+}
+
+// Does the work for CheckIdenticalDownload
+func checkIdenticalDownload(ctx context.Context, dst, src fs.Object) (differ bool, err error) {
 	in1, err := dst.Open(ctx)
 	if err != nil {
 		return true, errors.Wrapf(err, "failed to open %q", dst)
 	}
 	tr1 := accounting.Stats(ctx).NewTransfer(dst)
 	defer func() {
-		tr1.Done(err)
+		tr1.Done(nil) // error handling is done by the caller
 	}()
 	in1 = tr1.Account(in1).WithBuffer() // account and buffer the transfer
 
@@ -969,7 +1014,7 @@ func CheckIdentical(ctx context.Context, dst, src fs.Object) (differ bool, err e
 	}
 	tr2 := accounting.Stats(ctx).NewTransfer(dst)
 	defer func() {
-		tr2.Done(err)
+		tr2.Done(nil) // error handling is done by the caller
 	}()
 	in2 = tr2.Account(in2).WithBuffer() // account and buffer the transfer
 
@@ -982,7 +1027,7 @@ func CheckIdentical(ctx context.Context, dst, src fs.Object) (differ bool, err e
 // and the actual contents of the files.
 func CheckDownload(ctx context.Context, fdst, fsrc fs.Fs, oneway bool) error {
 	check := func(ctx context.Context, a, b fs.Object) (differ bool, noHash bool) {
-		differ, err := CheckIdentical(ctx, a, b)
+		differ, err := CheckIdenticalDownload(ctx, a, b)
 		if err != nil {
 			err = fs.CountError(err)
 			fs.Errorf(a, "Failed to download: %v", err)

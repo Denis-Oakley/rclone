@@ -447,6 +447,7 @@ func NewFsWithConnection(opt *Options, name, root string, c *swift.Connection, n
 		WriteMimeType:     true,
 		BucketBased:       true,
 		BucketBasedRootOK: true,
+		SlowModTime:       true,
 	}).Fill(f)
 	if f.rootContainer != "" && f.rootDirectory != "" {
 		// Check to see if the object exists - ignoring directory markers
@@ -1124,6 +1125,9 @@ func (o *Object) removeSegments(except string) error {
 	// remove the segments container if empty, ignore errors
 	err = o.fs.pacer.Call(func() (bool, error) {
 		err = o.fs.c.ContainerDelete(segmentsContainer)
+		if err == swift.ContainerNotFound || err == swift.ContainerNotEmpty {
+			return false, err
+		}
 		return shouldRetry(err)
 	})
 	if err == nil {
