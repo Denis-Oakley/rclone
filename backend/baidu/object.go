@@ -78,8 +78,11 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (in io.Read
 // Remove an object
 func (o *Object) Remove(ctx context.Context) error {
 	fs.Debugf(o, "Remove")
-	<-deletingTicker
+	deletingControl.wait()
 	path := o.fs.opt.Enc.FromStandardPath(o.absolutePath)
 	pcsError := o.fs.baiduPcs.Remove(path)
+	if isFrequencyTooHigh(pcsError) {
+		deletingControl.fail()
+	}
 	return pcsError
 }

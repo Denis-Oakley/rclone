@@ -25,8 +25,11 @@ const (
 var (
 	uploadBufBytesSlice []*BufBytes
 	fsLock              sync.Mutex
-	deletingTicker      <-chan time.Time
-	creatingFileTicker  <-chan time.Time
+	listingControl      rateControl
+	deletingControl     rateControl
+	creatingControl     rateControl
+	pcsRefuseService    = 31034
+	fileNotExists       = 31066
 )
 
 func init() {
@@ -106,6 +109,21 @@ type BufBytes struct {
 	done chan int
 }
 
+type ringBuffer struct {
+	data   []time.Time
+	length int
+	front  int
+	rear   int
+}
+
+type rateControl struct {
+	failures     ringBuffer
+	lock         sync.RWMutex
+	failuresLock sync.Mutex
+	interval     time.Duration
+	ticker       <-chan time.Time
+}
+
 // -----------------------------------------------
 
 func addSlash(path string) string {
@@ -118,6 +136,24 @@ func removeSlash(path string) string {
 
 func printPcsError(pcsError pcserror.Error) {
 	fmt.Printf("%#v, %#v, %#v, %#v\n", pcsError.Error(), pcsError.GetErrType(), pcsError.GetRemoteErrCode(), pcsError.GetRemoteErrMsg())
+}
+
+func isFrequencyTooHigh(err error) bool {
+	if err == nil {
+		return false
+	}
+	if pcsErr, ok := err.(pcserror.Error); ok {
+		printPcsError(pcsErr)
+		if pcsErr.GetErrType() == pcserror.ErrTypeNetError || pcsErr.GetRemoteErrCode() == pcsRefuseService {
+			return true
+		}
+	} else {
+		if err.Error() == "net/http: timeout awaiting response headers" {
+			// EOF
+			return true
+		}
+	}
+	return false
 }
 
 // -----------------------------------------------
@@ -145,6 +181,79 @@ func (r *BufBytes) write(in io.Reader) error {
 	r.len = int64(n)
 	r.i = 0
 	return nil
+}
+
+// -----------------------------------------------
+
+func (r *ringBuffer) init(len int) {
+	r.data = make([]time.Time, len)
+	r.length = len
+}
+
+func (r *ringBuffer) len() int {
+	l := r.rear - r.front
+	if l < 0 {
+		return l + r.length
+	}
+	return l
+}
+
+func (r *ringBuffer) next(i int) int {
+	if i == r.length {
+		return 0
+	}
+	return i
+}
+
+func (r *ringBuffer) enqueue(time1 time.Time) {
+	r.data[r.rear] = time1
+	r.rear = r.next(r.rear)
+}
+
+func (r *ringBuffer) dequeue() {
+	r.front = r.next(r.front)
+}
+
+// -----------------------------------------------
+
+func (c *rateControl) init(interval time.Duration) {
+	c.failures.init(6)
+	c.interval = interval
+	c.ticker = time.Tick(interval)
+}
+
+func (c *rateControl) wait() {
+	c.lock.RLock()
+	c.lock.RUnlock()
+	<-c.ticker
+}
+
+func (c *rateControl) fail() {
+	now := time.Now()
+	go func() {
+		c.failuresLock.Lock()
+		c.failures.enqueue(now)
+		if c.failures.len() >= 5 {
+			if now.Sub(c.failures.data[c.failures.front]) > c.interval*6 {
+				c.lock.Lock()
+				time.Sleep(time.Second * 10)
+				c.lock.Unlock()
+			}
+			now = time.Now()
+			for {
+				front := c.failures.front
+				if front == c.failures.rear {
+					break
+				}
+				if now.Sub(c.failures.data[front]) > c.interval*6 {
+					c.failures.dequeue()
+				} else {
+					break
+				}
+			}
+		}
+		c.failuresLock.Unlock()
+	}()
 }
 
 // -----------------------------------------------

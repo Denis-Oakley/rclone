@@ -57,12 +57,9 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 	fsLock.Lock()
 	if len(uploadBufBytesSlice) == 0 {
 		uploadBufBytesSlice = f.newBufBytesSlice(opt.MaxUploadThreadCount)
-	}
-	if deletingTicker == nil {
-		deletingTicker = time.Tick(time.Second)
-	}
-	if creatingFileTicker == nil {
-		creatingFileTicker = time.Tick(time.Second)
+		listingControl.init(100 * time.Millisecond)
+		deletingControl.init(1000 * time.Millisecond)
+		creatingControl.init(1000 * time.Millisecond)
 	}
 	fsLock.Unlock()
 
@@ -105,12 +102,16 @@ func (f *Fs) Precision() time.Duration {
 func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
 	absolutePath := filepath.Join(f.rootWithSlash, remote)
 	fs.Debugf(f, "newObjectWithInfo: %s", absolutePath)
+	listingControl.wait()
 	fullPathEncoded := f.opt.Enc.FromStandardPath(absolutePath)
 	meta, err := f.baiduPcs.FilesDirectoriesMeta(fullPathEncoded)
 	if err != nil {
 		if err.GetRemoteErrCode() == 31066 {
 			// File not found
 			return nil, fs.ErrorObjectNotFound
+		}
+		if isFrequencyTooHigh(err) {
+			listingControl.fail()
 		}
 		return nil, err
 	}
@@ -136,10 +137,14 @@ func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
 func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err error) {
 	absolutePath := filepath.Join(f.rootWithSlash, dir)
 	fs.Debugf(f, "List: %s", absolutePath)
+	listingControl.wait()
 	dirEncoded := f.opt.Enc.FromStandardPath(absolutePath)
-	list, err := f.baiduPcs.FilesDirectoriesList(dirEncoded, nil)
-	if err != nil {
-		return nil, err
+	list, pcsErr := f.baiduPcs.FilesDirectoriesList(dirEncoded, nil)
+	if pcsErr != nil {
+		if isFrequencyTooHigh(pcsErr) {
+			listingControl.fail()
+		}
+		return nil, pcsErr.GetError()
 	}
 
 	dirEntries := make([]fs.DirEntry, 0, len(list))
@@ -195,9 +200,12 @@ func (f *Fs) Mkdir(ctx context.Context, dir string) error {
 func (f *Fs) Rmdir(ctx context.Context, dir string) error {
 	dir = filepath.Join(f.rootWithSlash, dir)
 	fs.Debugf(f, "Rmdir: %s", dir)
-	<-deletingTicker
+	deletingControl.wait()
 	path := f.opt.Enc.FromStandardPath(dir)
 	pcsError := f.baiduPcs.Remove(path)
+	if isFrequencyTooHigh(pcsError) {
+		deletingControl.fail()
+	}
 	return pcsError
 }
 

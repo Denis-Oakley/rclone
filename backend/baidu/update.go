@@ -40,6 +40,12 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 		fs.Debugf(o, "upload successfully")
 	}
 
+	onError := func(err error) {
+		if isFrequencyTooHigh(err) {
+			creatingControl.fail()
+		}
+	}
+
 	// create an empty file, prevent 'file does not exist'
 	// internalOrigin/pcsfunctions/pcsupload/upload.go:
 	// func (pu *PCSUpload) CreateSuperFile(checksumList ...string) (err error)
@@ -59,6 +65,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 			return client.Req(http.MethodPost, uploadURL, mr, nil)
 		}
 
+		creatingControl.wait()
 		return baiduPcs.Upload(pathEncoded, createEmptyFileFunc)
 	}
 
@@ -68,6 +75,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 			pcsErr = createEmptyFileFunc()
 			if pcsErr != nil {
 				fs.Infof(o, "create empty file error: %s", pcsErr.Error())
+				onError(pcsErr)
 				continue
 			}
 			onSuccess()
@@ -114,6 +122,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 				return client.Req(http.MethodPost, uploadURL, mr, nil)
 			}
 
+			creatingControl.wait()
 			bufBytes.i = 0
 			return baiduPcs.Upload(pathEncoded, uploadFileFunc)
 		}
@@ -123,6 +132,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 			pcsErr = uploadFileFunc()
 			if pcsErr != nil {
 				fs.Infof(o, "upload file error: %s", pcsErr.Error())
+				onError(pcsErr)
 				continue
 			}
 			onSuccess()
@@ -141,6 +151,9 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 		returnErrLock.Lock()
 		if err != nil {
 			returnErr = err
+			if pcsErr, ok := err.(pcserror.Error); ok {
+				onError(pcsErr)
+			}
 		}
 		returnErrLock.Unlock()
 		_cancel()
@@ -170,6 +183,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 			pcsErr = createEmptyFileFunc()
 			if pcsErr != nil {
 				fs.Infof(o, "create empty file error: %s", pcsErr.Error())
+				onError(pcsErr)
 				continue
 			}
 			return
@@ -257,6 +271,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 				checksum, pcsErr = uploadTmpFileFunc()
 				if pcsErr != nil {
 					fs.Infof(o, "upload temp file error: %s", pcsErr.Error())
+					onError(pcsErr)
 					if status == failed {
 						cancel(pcsErr)
 						return
@@ -288,6 +303,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 		pcsErr := createSuperFileFunc()
 		if pcsErr != nil {
 			fs.Infof(o, "create super file error: %s", pcsErr.Error())
+			onError(pcsErr)
 			if i >= 3 {
 				return pcsErr
 			}
