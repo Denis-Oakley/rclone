@@ -135,7 +135,7 @@ func removeSlash(path string) string {
 }
 
 func printPcsError(pcsError pcserror.Error) {
-	fmt.Printf("%#v, %#v, %#v, %#v\n", pcsError.Error(), pcsError.GetErrType(), pcsError.GetRemoteErrCode(), pcsError.GetRemoteErrMsg())
+	fs.Infof(nil, "%#v, %#v, %#v, %#v", pcsError.Error(), pcsError.GetErrType(), pcsError.GetRemoteErrCode(), pcsError.GetRemoteErrMsg())
 }
 
 func isFrequencyTooHigh(err error) bool {
