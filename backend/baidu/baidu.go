@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -148,7 +149,7 @@ func isFrequencyTooHigh(err error) bool {
 			return true
 		}
 	} else {
-		if err.Error() == "net/http: timeout awaiting response headers" {
+		if strings.Contains(err.Error(), "net/http: timeout awaiting response headers") {
 			// EOF
 			return true
 		}
