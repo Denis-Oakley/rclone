@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/iikira/BaiduPCS-Go/baidupcs/pcserror"
 	"github.com/iikira/BaiduPCS-Go/internalOrigin/pcsfunctions/pcsupload"
@@ -293,6 +294,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 	if errors.Is(allCancelCtx.Err(), context.Canceled) {
 		return
 	}
+	time.Sleep(time.Second)
 
 	// Merge file fragments
 	createSuperFileFunc := func() pcserror.Error {
