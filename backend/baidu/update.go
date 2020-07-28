@@ -245,7 +245,7 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 				resp, err = client.Req(http.MethodPost, uploadURL, mr, nil)
 				if resp != nil {
 					switch resp.StatusCode {
-					case 400, 401, 403, 413:
+					case 401, 403, 413:
 						// Unrecoverable error
 						status = failed
 					}
@@ -294,7 +294,6 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 	if errors.Is(allCancelCtx.Err(), context.Canceled) {
 		return
 	}
-	time.Sleep(time.Second)
 
 	// Merge file fragments
 	createSuperFileFunc := func() pcserror.Error {
@@ -325,13 +324,10 @@ func shouldReCreateSuperFile(pcsError pcserror.Error) bool {
 	switch pcsError.GetErrType() {
 	case pcserror.ErrTypeRemoteError:
 		switch pcsError.GetRemoteErrCode() {
-		// 31352, commit superfile2 failed
 		case 31363:
-			// block miss in superfile2. Upload status expired
+			time.Sleep(time.Second)
 			return true
 		case 31200:
-			// server error
-			// [Method:Insert][Error:Insert Request Forbid]
 			return true
 		}
 	case pcserror.ErrTypeNetError:
