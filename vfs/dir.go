@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -28,12 +29,14 @@ type Dir struct {
 	mu      sync.RWMutex // protects the following
 	parent  *Dir         // parent, nil for root
 	path    string
-	modTime time.Time
 	entry   fs.Directory
 	read    time.Time         // time directory entry last read
 	items   map[string]Node   // directory entries - can be empty but not nil
 	virtual map[string]vState // virtual directory entries - may be nil
-	sys     interface{}       // user defined info to be attached here
+	sys     atomic.Value      // user defined info to be attached here
+
+	modTimeMu sync.Mutex // protects the following
+	modTime   time.Time
 }
 
 //go:generate stringer -type=vState
@@ -105,16 +108,12 @@ func (d *Dir) Path() (name string) {
 
 // Sys returns underlying data source (can be nil) - satisfies Node interface
 func (d *Dir) Sys() interface{} {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.sys
+	return d.sys.Load()
 }
 
 // SetSys sets the underlying data source (can be nil) - satisfies Node interface
 func (d *Dir) SetSys(x interface{}) {
-	d.mu.Lock()
-	d.sys = x
-	d.mu.Unlock()
+	d.sys.Store(x)
 }
 
 // Inode returns the inode number - satisfies Node interface
@@ -273,11 +272,13 @@ func (d *Dir) _age(when time.Time) (age time.Duration, stale bool) {
 // reading everything again
 func (d *Dir) rename(newParent *Dir, fsDir fs.Directory) {
 	d.ForgetAll()
+	d.modTimeMu.Lock()
+	d.modTime = fsDir.ModTime(context.TODO())
+	d.modTimeMu.Unlock()
 	d.mu.Lock()
 	d.parent = newParent
 	d.entry = fsDir
 	d.path = fsDir.Remote()
-	d.modTime = fsDir.ModTime(context.TODO())
 	d.read = time.Time{}
 	d.mu.Unlock()
 }
@@ -553,8 +554,8 @@ func (d *Dir) isEmpty() (bool, error) {
 
 // ModTime returns the modification time of the directory
 func (d *Dir) ModTime() time.Time {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.modTimeMu.Lock()
+	defer d.modTimeMu.Unlock()
 	// fs.Debugf(d.path, "Dir.ModTime %v", d.modTime)
 	return d.modTime
 }
@@ -569,9 +570,9 @@ func (d *Dir) SetModTime(modTime time.Time) error {
 	if d.vfs.Opt.ReadOnly {
 		return EROFS
 	}
-	d.mu.Lock()
+	d.modTimeMu.Lock()
 	d.modTime = modTime
-	d.mu.Unlock()
+	d.modTimeMu.Unlock()
 	return nil
 }
 

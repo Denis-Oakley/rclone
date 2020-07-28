@@ -10,6 +10,10 @@ FTP is the File Transfer Protocol. FTP support is provided using the
 [github.com/jlaffaye/ftp](https://godoc.org/github.com/jlaffaye/ftp)
 package.
 
+Paths are specified as `remote:path`. If the path does not begin with
+a `/` it is relative to the home directory of the user.  An empty path
+`remote:` refers to the user's home directory.
+
 Here is an example of making an FTP configuration.  First run
 
     rclone config
@@ -253,8 +257,9 @@ See: the [encoding section in the overview](/overview/#encoding) for more info.
 
 ### Limitations ###
 
-Note that since FTP isn't HTTP based the following flags don't work
-with it: `--dump-headers`, `--dump-bodies`, `--dump-auth`
+Note that FTP does have its own implementation of : `--dump headers`,
+`--dump bodies`, `--dump auth` for debugging which isn't the same as
+the HTTP based backends - it has less fine grained control.
 
 Note that `--timeout` isn't supported (but `--contimeout` is).
 

@@ -4,34 +4,34 @@ go 1.14
 
 require (
 	bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05
-	cloud.google.com/go v0.60.0 // indirect
-	github.com/Azure/azure-pipeline-go v0.2.2
+	cloud.google.com/go v0.61.0 // indirect
+	github.com/Azure/azure-pipeline-go v0.2.3
 	github.com/Azure/azure-storage-blob-go v0.10.0
-	github.com/Azure/go-autorest/autorest/adal v0.9.0 // indirect
+	github.com/Azure/go-autorest/autorest v0.11.2 // indirect
 	github.com/Unknwon/goconfig v0.0.0-20191126170842-860a72fb44fd
 	github.com/a8m/tree v0.0.0-20181222104329-6a0b80129de4
 	github.com/aalpar/deheap v0.0.0-20200318053559-9a0c2883bd56
 	github.com/abbot/go-http-auth v0.4.0
 	github.com/anacrolix/dms v1.1.0
 	github.com/atotto/clipboard v0.1.2
-	github.com/aws/aws-sdk-go v1.32.13
-	github.com/billziss-gh/cgofuse v1.3.0
+	github.com/aws/aws-sdk-go v1.33.13
+	github.com/billziss-gh/cgofuse v1.4.0
 	github.com/btcsuite/btcutil v1.0.2 // indirect
 	github.com/calebcase/tmpfile v1.0.2 // indirect
 	github.com/coreos/go-semver v0.3.0
 	github.com/dropbox/dropbox-sdk-go-unofficial v5.6.0+incompatible
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/google/go-cmp v0.5.1 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/hanwen/go-fuse/v2 v2.0.3
 	github.com/iikira/Baidu-Login v1.2.2 // indirect
 	github.com/iikira/BaiduPCS-Go v3.5.6+incompatible
 	github.com/iikira/baidu-tools v0.0.0-20190609113215-4dd64618064d
-	github.com/jlaffaye/ftp v0.0.0-20200602180915-5563613968bf
+	github.com/jlaffaye/ftp v0.0.0-20200720194710-13949d38913e
 	github.com/jzelinskie/whirlpool v0.0.0-20170603002051-c19460b8caa6
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
-	github.com/klauspost/cpuid v1.3.0 // indirect
 	github.com/koofr/go-httpclient v0.0.0-20200420163713-93aa7c75b348
 	github.com/koofr/go-koofrclient v0.0.0-20190724113126-8e5366da203a
 	github.com/kr/text v0.2.0 // indirect
@@ -39,7 +39,6 @@ require (
 	github.com/mattn/go-colorable v0.1.7
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.9
-	github.com/minio/minio-go/v6 v6.0.57 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/ncw/go-acd v0.0.0-20171120105400-887eb06ab6a2
 	github.com/ncw/swift v1.0.52
@@ -47,7 +46,7 @@ require (
 	github.com/nsf/termbox-go v0.0.0-20200418040025-38ba6e5628f1
 	github.com/okzk/sdnotify v0.0.0-20180710141335-d9becc38acbd
 	github.com/olekukonko/tablewriter v0.0.4 // indirect
-	github.com/onsi/ginkgo v1.13.0 // indirect
+	github.com/onsi/ginkgo v1.14.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.11.0
@@ -69,24 +68,23 @@ require (
 	go.etcd.io/bbolt v1.3.5
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/zap v1.15.0 // indirect
-	goftp.io/server v0.3.5-0.20200630051340-d7b447417587
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20200625001655-4c5254603344
+	goftp.io/server v0.4.0
+	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
+	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
+	golang.org/x/sys v0.0.0-20200727154430-2d971f7391a4
 	golang.org/x/text v0.3.3
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
-	golang.org/x/tools v0.0.0-20200701041122-1837592efa10 // indirect
-	google.golang.org/api v0.28.0
-	google.golang.org/genproto v0.0.0-20200701001935-0939c5918c31 // indirect
+	golang.org/x/tools v0.0.0-20200727233628-55644ead90ce // indirect
+	google.golang.org/api v0.29.0
+	google.golang.org/genproto v0.0.0-20200728010541-3dc8dca74b7b // indirect
 	google.golang.org/grpc v1.30.0 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	gopkg.in/ini.v1 v1.57.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
-	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
-	storj.io/common v0.0.0-20200628040133-cc1132d33ee6 // indirect
+	storj.io/common v0.0.0-20200724061039-ae1758ee69b6 // indirect
 	storj.io/uplink v1.1.2
 )
 
